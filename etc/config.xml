@@ -4,7 +4,10 @@
     <default>
         <swissup_easytabs>
             <product_tabs>
+                <enabled>1</enabled>
                 <layout>collapsed</layout>
+                <multipleCollapsible>0</multipleCollapsible>
+                <activeTabs>-1</activeTabs>
             </product_tabs>
         </swissup_easytabs>
         <swissup_amp>
@@ -24,6 +27,10 @@
                         <tab_html>
                             <class>Swissup\Easytabs\Block\Tab\Html</class>
                         </tab_html>
+                        <tab_review>
+                            <class>Swissup\Easytabs\Block\Tab\Product\Review</class>
+                            <template>swissupamp/review.phtml</template>
+                        </tab_review>
                         <widget_tabs>
                             <class>Swissup\Easytabs\Block\WidgetTabs</class>
                             <template>swissupamp/tabs.phtml</template>

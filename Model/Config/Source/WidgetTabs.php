@@ -13,8 +13,7 @@ class WidgetTabs implements \Magento\Framework\Option\ArrayInterface
      */
     public function __construct(
         \Swissup\Easytabs\Model\ResourceModel\Entity\CollectionFactory $tabsCollectionFactory
-    )
-    {
+    ) {
         $this->tabsCollectionFactory = $tabsCollectionFactory;
     }
 
@@ -26,14 +25,17 @@ class WidgetTabs implements \Magento\Framework\Option\ArrayInterface
     public function toOptionArray()
     {
         $options[] = ['label' => '', 'value' => ''];
-        $widgetTabs = $this->tabsCollectionFactory->create()->addWidgetTabFilter();
+        $widgetTabs = $this->tabsCollectionFactory->create()
+            ->addStatusFilter(1)
+            ->addWidgetTabFilter();
+
         foreach ($widgetTabs as $tab) {
-            $options[] = [
+            $options[$tab->getAlias()] = [
                 'label' => $tab->getTitle(),
                 'value' => $tab->getAlias(),
             ];
         }
 
-        return $options;
+        return array_values($options);
     }
 }

@@ -44,6 +44,14 @@ class Review extends \Magento\Review\Block\Product\Review
             $containerName = $blockName . '.fields.before';
             $layout->addContainer($containerName, 'Review Form Fields Before');
             $layout->setChild($blockName, $containerName, 'form_fields_before');
+            $blocksToAssign = [
+                'msp-recaptcha', // MSP Recaptcha block name in Magento 2.3.x
+                'recaptcha' // Recaptcha block name in Magento 2.4.x
+            ];
+            $availableBlocks = array_filter($blocksToAssign, [$layout, 'hasElement']);
+            array_walk($availableBlocks, function ($blockName) use ($layout, $containerName) {
+                $layout->setChild($containerName, $blockName, $blockName);
+            });
         }
 
         return parent::_prepareLayout();

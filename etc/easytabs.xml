@@ -40,8 +40,14 @@
         <label translate="true">Product attribute</label>
         <description>Create tab based on product attribute</description>
         <parameters>
-            <parameter name="widget_identifier" xsi:type="multiselect" required="true" visible="true" source_model="Swissup\Easytabs\Model\Product\Attribute\Collection">
+            <parameter name="widget_identifier" xsi:type="block" required="true" visible="true">
                 <label translate="true">Attribute Code</label>
+                <block class="Swissup\Easytabs\Block\Form\Element\Renderer\UiSelect">
+                    <data>
+                        <item name="scope_name" xsi:type="string">swissup_easytabs_uiselect</item>
+                        <item name="source_model" xsi:type="object">Swissup\Easytabs\Model\Product\Attribute\Collection</item>
+                    </data>
+                </block>
             </parameter>
             <parameter name="widget_template" xsi:type="text" required="true" visible="true">
                 <label translate="true">Template</label>
@@ -51,8 +57,8 @@
     </widget>
     <widget id="easytabs_product_description" class="Magento\Catalog\Block\Product\View\Description" is_email_compatible="false"
         placeholder_image="" ttl="86400">
-        <label translate="true">Product Desription</label>
-        <description>Show product desription in tab</description>
+        <label translate="true">Product Description</label>
+        <description>Show product description in tab</description>
         <parameters>
             <parameter name="widget_template" xsi:type="text" required="true" visible="true">
                 <label translate="true">Template</label>
@@ -75,7 +81,7 @@
             </parameter>
             <parameter name="widget_unset" xsi:type="text" required="false" visible="true">
                 <label translate="true">Unset</label>
-                <value></value>
+                <value>product.attributes.wrapper</value>
             </parameter>
         </parameters>
     </widget>
@@ -126,7 +132,7 @@
             </parameter>
             <parameter name="widget_unset" xsi:type="text" required="false" visible="true">
                 <label translate="true">Unset</label>
-                <value></value>
+                <value>product.reviews.wrapper</value>
             </parameter>
         </parameters>
     </widget>
@@ -137,7 +143,7 @@
         <parameters>
             <parameter name="widget_identifier" xsi:type="block" required="true" visible="true">
                 <label translate="true">Identifier</label>
-                <block class="Magento\Cms\Block\Adminhtml\Block\Widget\Chooser">
+                <block class="Swissup\Easytabs\Block\Adminhtml\CmsBlockChooser">
                     <data>
                         <item name="button" xsi:type="array">
                             <item name="open" xsi:type="string" translate="true">Select Block...</item>

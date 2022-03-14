@@ -39,13 +39,29 @@ class Options extends \Magento\Widget\Block\Adminhtml\Widget\Options
         if (!$this->getWidgetType()) {
             throw new \Magento\Framework\Exception\LocalizedException(__('Please specify a Widget Type.'));
         }
+
         $config = $this->tabsOptionsFactory->create()->getConfigAsObject($this->getWidgetType());
         if (!$config->getParameters()) {
             return $this;
         }
+
         foreach ($config->getParameters() as $parameter) {
-            $this->_addField($parameter);
+            if ($parameter->getHelperBlock()) {
+                $parameter->getHelperBlock()->setData('data-form-part', $this->getFormName());
+            }
+
+            $field = $this->_addField($parameter);
+            $field->setData('data-form-part', $this->getFormName());
         }
+
         return $this;
+    }
+
+    public function getFormHtml()
+    {
+        $form = $this->getForm();
+        $fieldset = $this->getMainFieldset();
+
+        return $fieldset->getChildrenHtml();
     }
 }

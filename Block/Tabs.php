@@ -1,17 +1,28 @@
 <?php
 namespace Swissup\Easytabs\Block;
 
+use Magento\Framework\UrlInterface;
+use Magento\Framework\DataObject\IdentityInterface;
+use Magento\Framework\Url\EncoderInterface;
+use Magento\Store\Model\Store;
 use Swissup\Easytabs\Api\Data\EntityInterface;
-use Swissup\Easytabs\Model\Entity as TabsModel;
+use Swissup\Easytabs\Model\Entity as TabModel;
 use Swissup\Easytabs\Model\ResourceModel\Entity\Collection as TabsCollection;
 use Swissup\Easytabs\Model\ResourceModel\Entity\CollectionFactory as TabsCollectionFactory;
 
-class Tabs extends \Magento\Framework\View\Element\Template
+class Tabs extends \Magento\Framework\View\Element\Template implements IdentityInterface
 {
     /**
      * {@inheritdocs}
      */
     protected $_template = 'tabs.phtml';
+
+    /**
+     * @var array
+     */
+    protected $blockUnsetTemplate = [
+        'product.reviews.wrapper'
+    ];
 
     /**
      * @var Swissup\Easytabs\Model\Template\Filter
@@ -25,15 +36,15 @@ class Tabs extends \Magento\Framework\View\Element\Template
     protected $_tabs = [];
 
     /**
+     * @var array of Blocks
+     */
+    private $tabBlocks = [];
+
+    /**
      * Get tabs collection
      * @var \Swissup\Easytabs\Model\ResourceModel\Entity\CollectionFactory
      */
     protected $tabsCollectionFactory;
-
-    /**
-     * @var \Magento\Framework\Json\EncoderInterface
-     */
-    protected $jsonEncoder;
 
     /**
      * @var \Magento\Framework\Module\FullModuleList
@@ -46,40 +57,49 @@ class Tabs extends \Magento\Framework\View\Element\Template
     protected $moduleManager;
 
     /**
+     * @var EncoderInterface
+     */
+    protected $encoder;
+
+    /**
      * Constructor
      *
      * @param \Magento\Framework\View\Element\Template\Context $context
      * @param TabsCollectionFactory                            $tabsCollectionFactory
      * @param \Swissup\Easytabs\Model\Template\Filter          $templateFilter
-     * @param \Magento\Framework\Json\EncoderInterface         $jsonEncoder
      * @param \Magento\Framework\Module\FullModuleList         $fullModuleList
      * @param \Magento\Framework\Module\Manager                $moduleManager
+     * @param EncoderInterface                                 $encoder
      * @param array                                            $data
      */
     public function __construct(
         \Magento\Framework\View\Element\Template\Context $context,
         TabsCollectionFactory $tabsCollectionFactory,
         \Swissup\Easytabs\Model\Template\Filter $templateFilter,
-        \Magento\Framework\Json\EncoderInterface $jsonEncoder,
         \Magento\Framework\Module\FullModuleList $fullModuleList,
         \Magento\Framework\Module\Manager $moduleManager,
+        EncoderInterface $encoder,
         array $data = []
     ) {
         $this->tabsCollectionFactory = $tabsCollectionFactory;
         $this->templateFilter = $templateFilter;
-        $this->jsonEncoder = $jsonEncoder;
         $this->fullModuleList = $fullModuleList;
         $this->moduleManager = $moduleManager;
+        $this->encoder = $encoder;
         parent::__construct($context, $data);
     }
 
+    /**
+     * @return mixed
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
+     */
     protected function _getCollection()
     {
         $collection = $this->tabsCollectionFactory->create();
         $storeId = $this->_storeManager->getStore()->getId();
         return $collection
             ->addOrder(EntityInterface::SORT_ORDER, TabsCollection::SORT_ORDER_DESC)
-            ->addStatusFilter(TabsModel::STATUS_ENABLED)
+            ->addStatusFilter(TabModel::STATUS_ENABLED)
             ->addStoreFilter($storeId);
     }
 
@@ -98,9 +118,32 @@ class Tabs extends \Magento\Framework\View\Element\Template
      */
     private function _buildTabs() {
         if (!$this->_tabs) {
-            foreach ($this->_getCollection() as $tab) {
+            $collection = $this->_getCollection();
+
+            $storeId = $this->_storeManager->getStore()->getId();
+            $tabs = [];
+            foreach ($collection as $tab) {
                 $isMatchConditions = $tab->validate($tab);
                 if (!$isMatchConditions) {
+                    continue;
+                }
+
+                $stores = $tab->getData('store_id');
+                $alias = $tab->getAlias();
+                $tabs[$alias] = $tabs[$alias] ?? [];
+                if (in_array($storeId, $stores)) {
+                    $tabs[$alias][(int)$storeId] = $tab;
+                } elseif (in_array(Store::DEFAULT_STORE_ID, $stores)) {
+                    $tabs[$alias][Store::DEFAULT_STORE_ID] = $tab;
+                }
+            }
+
+            foreach ($tabs as $tab) {
+                // Multiple tabs can have same alias.
+                // First try to find tabs specified for this store view.
+                // Then use tab from default store view level.
+                $tab = $tab[(int)$storeId] ?? ($tab[Store::DEFAULT_STORE_ID] ?? null);
+                if (!$tab) {
                     continue;
                 }
 
@@ -110,7 +153,8 @@ class Tabs extends \Magento\Framework\View\Element\Template
                     $tab->getTitle(),
                     $tab->getBlock(),
                     $tab->getWidgetTemplate(),
-                    $tab->getData()
+                    $tab->getData(),
+                    $tab->getIsAjax()
                 );
 
                 $unsets = (string) $tab->getWidgetUnset();
@@ -118,24 +162,38 @@ class Tabs extends \Magento\Framework\View\Element\Template
                 $layout = $this->getLayout();
                 foreach ($unsets as $blockName) {
                     $block = $layout->getBlock($blockName);
-                    if ($block) {
+                    if (!$block)
+                        continue;
+
+                    if (in_array($blockName, $this->blockUnsetTemplate))
+                        // don't unset block it can cause exception; unset template
+                        $block->setTemplate('');
+                    else
                         $layout->unsetElement($blockName);
-                    }
                 }
             }
+
+            usort($this->_tabs, array($this, '_sort'));
         }
     }
 
     /**
      * Add tab on product page
-     * @param string $alias
-     * @param string $title
-     * @param string $block
-     * @param string $template
-     * @param array  $attributes
+     * @param string  $alias
+     * @param string  $title
+     * @param string  $block
+     * @param string  $template
+     * @param array   $attributes
+     * @param boolean $isAjax
      */
-    public function addTab($alias, $title, $block = false, $template = false, $attributes = array())
-    {
+    public function addTab(
+        $alias,
+        $title,
+        $block = false,
+        $template = false,
+        $attributes = [],
+        $isAjax = false
+    ) {
         if (!$title || ($block && $block !== 'Swissup\Easytabs\Block\Tab\Html' && !$template)) {
             return false;
         }
@@ -166,6 +224,10 @@ class Tabs extends \Magento\Framework\View\Element\Template
                 }
             }
 
+            if ($this->getLayout()->getBlock($alias)) {
+                $this->getLayout()->unsetElement($alias);
+            }
+
             try {
                 $block = $this->getLayout()
                     ->createBlock($block, $alias, ['data' => $attributes])
@@ -178,10 +240,12 @@ class Tabs extends \Magento\Framework\View\Element\Template
             }
         }
 
-        $tab = array(
+        $tab = [
+            'id' => $attributes['tab_id'] ?? '',
             'alias' => $alias,
-            'title' => $title
-        );
+            'title' => $title,
+            'is_ajax' => $isAjax
+        ];
 
         if (isset($attributes['sort_order'])) {
             $tab['sort_order'] = $attributes['sort_order'];
@@ -189,6 +253,7 @@ class Tabs extends \Magento\Framework\View\Element\Template
 
         $this->_tabs[] = $tab;
 
+        $this->tabBlocks[$alias] = $block;
         $this->setChild($alias, $block);
     }
 
@@ -208,12 +273,15 @@ class Tabs extends \Magento\Framework\View\Element\Template
         return ($tab1['sort_order'] < $tab2['sort_order']) ? -1 : 1;
     }
 
+    /**
+     * @return array
+     */
     public function getTabs()
     {
         $this->_buildTabs();
-        usort($this->_tabs, array($this, '_sort'));
         return $this->_tabs;
     }
+
     /**
      * Check tab content for anything except html tags and spaces
      *
@@ -230,6 +298,10 @@ class Tabs extends \Magento\Framework\View\Element\Template
         return strlen($content) === 0;
     }
 
+    /**
+     * @param  array $tab
+     * @return string
+     */
     public function getTabTitle($tab)
     {
         if (!strstr($tab['title'], '{{') || !strstr($tab['title'], '}}')) {
@@ -245,9 +317,34 @@ class Tabs extends \Magento\Framework\View\Element\Template
         return $processor->filter($tab['title']);
     }
 
+    /**
+     * Get JSON string with settings for js widget
+     *
+     * @return string
+     */
     public function getInitOptions()
     {
-        return '{}';
+        $options = $this->getJsWidgetOptions();
+        $layout = $this->getTabsLayout();
+        $json = json_encode($options[$layout] ?? [], JSON_UNESCAPED_SLASHES);
+
+        return $json;
+    }
+
+    /**
+     * @param $alias
+     * @param false $useCache
+     * @return string
+     */
+    private function getChildTabHtml($alias, $useCache = false)
+    {
+        if (isset($this->tabBlocks[$alias])) {
+            /** @var $tabBlock \Magento\Framework\View\Element\AbstractBlockTest */
+            $tabBlock = $this->tabBlocks[$alias];
+            return $tabBlock->toHtml();
+        }
+
+        return $this->getChildHtml($alias, $useCache);
     }
 
     /**
@@ -259,7 +356,7 @@ class Tabs extends \Magento\Framework\View\Element\Template
     {
         $tabs = [];
         foreach ($this->getTabs() as $_index => $_tab) {
-            if (!($childHtml = $this->getChildHtml($_tab['alias']))
+            if (!($childHtml = $this->getChildTabHtml($_tab['alias']))
                 || $this->isEmptyString($childHtml)) {
                 continue;
             }
@@ -270,5 +367,83 @@ class Tabs extends \Magento\Framework\View\Element\Template
         }
 
         return $tabs;
+    }
+
+    /**
+     * @param  string $tabAlias
+     * @return string
+     */
+    public function getAjaxUrl($alias)
+    {
+        $block = $this->getLayout()->getBlock('product.info');
+        $product = $block ? $block->getProduct() : false;
+        $pathAlias = $this->getRequest()->getAlias(UrlInterface::REWRITE_REQUEST_PATH_ALIAS);
+
+        return $this->getUrl(
+            'easytabs',
+            [
+                'id' => $product ? $product->getId() : null,
+                'tab' => $alias,
+                'path_alias' => $this->encoder->encode($pathAlias)
+            ]
+        );
+    }
+
+    /**
+     * Is tabs layout expanded
+     *
+     * @return boolean
+     */
+    public function isExpanded() {
+        return $this->getTabsLayout() === 'expanded';
+    }
+
+    /**
+     * Is tabs layout accordion
+     *
+     * @return boolean
+     */
+    public function isAccordion() {
+        return $this->getTabsLayout() === 'accordion';
+    }
+
+    /**
+     * @return array
+     */
+    protected function getJsWidgetOptions()
+    {
+        return [
+            'collapsed' => [
+                'ajaxContent' => true,
+                'openedState' => 'active'
+            ],
+            'expanded' => [
+                'ajaxContent' => true,
+                'active' => array_keys($this->getTabs()),
+                'multipleCollapsible' => true,
+                'collapsible' => false,
+                'openedState' => 'active'
+            ],
+            'accordion' => [
+                'ajaxContent' => true,
+                'active' => [-1],
+                'collapsible' => true,
+                'openedState' => 'active'
+            ]
+        ];
+    }
+
+    /**
+     * @return array
+     */
+    public function getIdentities()
+    {
+        $result = [];
+
+        foreach ($this->getTabs() as $tab) {
+            $result[] = TabModel::CACHE_TAG . '_' . $tab['id'];
+        }
+
+        return $result;
     }
 }

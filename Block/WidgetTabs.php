@@ -3,6 +3,9 @@ namespace Swissup\Easytabs\Block;
 
 class WidgetTabs extends Tabs implements \Magento\Widget\Block\BlockInterface
 {
+    /**
+     * {@inheritdoc}
+     */
     protected function _getCollection()
     {
         $collection = parent::_getCollection();
@@ -13,8 +16,13 @@ class WidgetTabs extends Tabs implements \Magento\Widget\Block\BlockInterface
         return $collection;
     }
 
-    public function getInitOptions()
+    /**
+     * @return string
+     */
+    public function getTabsLayout()
     {
-        return '{"collapsible": false, "openedState": "active"}';
+        $layout = $this->getData('tabs_layout');
+
+        return $layout ?: 'collapsed';
     }
 }

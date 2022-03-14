@@ -14,7 +14,7 @@ class MassDelete extends \Magento\Backend\App\Action
     /**
      * Admin resource
      */
-    const ADMIN_RESOURCE = 'Swissup_Easytabs::easytabs_product_delete';
+    const ADMIN_RESOURCE = 'Swissup_Easytabs::easytabs_delete';
     /**
      * @var Filter
      */
@@ -45,6 +45,15 @@ class MassDelete extends \Magento\Backend\App\Action
      */
     public function execute()
     {
+        $tabId = $this->_request->getParam('tab_id');
+        if ($tabId) {
+            $selected = $this->_request->getParam(Filter::SELECTED_PARAM, []);
+            $excluded = $this->_request->getParam(Filter::EXCLUDED_PARAM, []);
+            $selected[] = $tabId;
+            $this->_request->setParam(Filter::SELECTED_PARAM, $selected);
+            $this->_request->setParam(Filter::EXCLUDED_PARAM, $excluded);
+        }
+
         $collection = $this->filter->getCollection($this->collectionFactory->create());
         $collectionSize = $collection->getSize();
 
